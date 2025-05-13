@@ -14,6 +14,48 @@ namespace TargetClearCS
 {
     public static class Trace
     {
+        public static class Table
+        {
+            public static List<(string, object)> History = new List<(string, object)>();
+
+
+            public static void Set<T>(string id, ref T obj, T value)
+            {
+                History.Add((id, Trace.Format(value)));
+                obj = value;
+            }
+            public static void Became<T>(string id, T value)
+            {
+                History.Add((id, value));
+            }
+
+            public static string[] GetTable()
+            {
+                HashSet<string> list = new HashSet<string>();
+                foreach (var i in History) list.Add(i.Item1.ToString());
+                string[] titles = list.ToArray();
+                int[] widest = new int[titles.Length];
+                for (int i = 0; i < widest.Length; i++) widest[i] = titles[i].Length;
+                List<string[]> values = new List<string[]>() { new string[titles.Length] };
+                foreach (var i in History)
+                {
+                    if (values.Last()[Array.IndexOf(titles, i.Item1)] != null) values.Add(new string[titles.Length]);
+                    values.Last()[Array.IndexOf(titles, i.Item1)] = i.Item2.ToString();
+                    widest[Array.IndexOf(titles, i.Item1)] = Math.Max(values.Last()[Array.IndexOf(titles, i.Item1)].Length, widest[Array.IndexOf(titles, i.Item1)]);
+                }
+                for (int i = 0; i < values.Count; i++) for (int j = 0; j < values[i].Length; j++) if (values[i][j] == null) values[i][j] = string.Empty;
+                for (int i = 0; i < titles.Length; i++) titles[i] = $" {titles[i].PadLeft(widest[i])} ";
+                foreach (var i in values) for (int j = 0; j < i.Length; j++) i[j] = $" {i[j].PadLeft(widest[j])} ";
+                List<string> output = new List<string>() { titles.Aggregate(string.Empty, (i,x) => $"{i}|{x}") };
+                output.Add(new string('=', output.Last().Length));
+                foreach (var i in values)
+                {
+                    output.Add(i.Aggregate(string.Empty, (j, x) => $"{j}|{x}"));
+                }
+                return output.ToArray();
+            }
+        }
+
         const string indentString = "  |  ";
         static string indent = "";
         static string name = $"Game started {DateTime.Now.Hour}_{DateTime.Now.Minute}_{DateTime.Now.Second} on {DateTime.Now.Date.Day}_{DateTime.Now.Date.Month}.txt";
@@ -104,6 +146,14 @@ namespace TargetClearCS
                 }
             }
         }
+        public static void TraceTable()
+        {
+            string[] write = Table.GetTable();
+            using (StreamWriter sw = new StreamWriter(name, true))
+            {
+                foreach (string s in write) { sw.WriteLine($"{indent} # {s} #"); }
+            }
+        }
     }
     internal class Program
     {
@@ -111,34 +161,51 @@ namespace TargetClearCS
 
         static void Main(string[] args)
         {
-            Trace.Open("Main");
-            List<int> NumbersAllowed = new List<int>();
-            List<int> Targets;
-            int MaxNumberOfTargets = 20;
-            int MaxTarget;
-            int MaxNumber;
-            bool TrainingGame;
-            Trace.Write("Enter y to play the training game, anything else to play a random game: ");
-            string Choice = Trace.ReadLine().ToLower();
-            Trace.WriteLine();
-            if (Choice == "y")
+            try
             {
-                MaxNumber = 1000;
-                MaxTarget = 1000;
-                TrainingGame = true;
-                Targets = new List<int> { -1, -1, -1, -1, -1, 23, 9, 140, 82, 121, 34, 45, 68, 75, 34, 23, 119, 43, 23, 119 };
+                Trace.Open("Main");
+                List<int> NumbersAllowed = new List<int>();
+                List<int> Targets;
+                int MaxNumberOfTargets = 20;
+                Trace.Table.Became("MaxNumberOfTargets", MaxNumberOfTargets);
+                int MaxTarget;
+                int MaxNumber;
+                bool TrainingGame;
+                Trace.Write("Enter y to play the training game, anything else to play a random game: ");
+                string Choice = Trace.ReadLine().ToLower();
+                Trace.Table.Became("Choice", Choice);
+                Trace.WriteLine();
+                if (Choice == "y")
+                {
+                    MaxNumber = 1000;
+                    Trace.Table.Became("MaxNumber", MaxNumber);
+                    MaxTarget = 1000;
+                    Trace.Table.Became("MaxTarget", MaxTarget);
+                    TrainingGame = true;
+                    Trace.Table.Became("TrainingGame", TrainingGame);
+                    Targets = new List<int> { -1, -1, -1, -1, -1, 23, 9, 140, 82, 121, 34, 45, 68, 75, 34, 23, 119, 43, 23, 119 };
+                    Trace.Table.Became("Targets", Targets);
+                }
+                else
+                {
+                    MaxNumber = 10;
+                    Trace.Table.Became("MaxNumber", MaxNumber);
+                    MaxTarget = 50;
+                    Trace.Table.Became("MaxTarget", MaxTarget);
+                    TrainingGame = false;
+                    Trace.Table.Became("TrainingGame", TrainingGame);
+                    Targets = CreateTargets(MaxNumberOfTargets, MaxTarget);
+                    Trace.Table.Became("Targets", Targets);
+                }
+                NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber);
+                Trace.Table.Became("NumbersAllowed", NumbersAllowed);
+                PlayGame(Targets, NumbersAllowed, TrainingGame, MaxTarget, MaxNumber);
+                Trace.ReadLine();
+                Trace.Close();
             }
-            else
-            {
-                MaxNumber = 10;
-                MaxTarget = 50;
-                TrainingGame = false;
-                Targets = CreateTargets(MaxNumberOfTargets, MaxTarget);
-            }
-            NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber);
-            PlayGame(Targets, NumbersAllowed, TrainingGame, MaxTarget, MaxNumber);
-            Trace.ReadLine();
-            Trace.Close();
+            catch { }
+
+            Trace.TraceTable();
         }
 
         static void PlayGame(List<int> Targets, List<int> NumbersAllowed, bool TrainingGame, int MaxTarget, int MaxNumber)
