@@ -1,6 +1,6 @@
-Currently outputs:
-INPUT '<userinput>'
-OUTPUT '<console.write/line>
-RUN <methodName>
-PARAM <parameter of method>
-RETURNED <function return>
+## Currently outputs:<br/>
+INPUT '\<userinput\>'<br/>
+OUTPUT '\<console.write/line\><br/>
+RUN '\<methodName\>'<br/>
+PARAM '\<parameter of method\>'<br/>
+RETURNED '\<function return\>'<br/>
