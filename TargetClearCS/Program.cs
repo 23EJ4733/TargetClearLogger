@@ -26,7 +26,7 @@ namespace TargetClearCS
             }
             public static void Became<T>(string id, T value)
             {
-                History.Add((id, value));
+                History.Add((id, Trace.Format(value)));
             }
 
             public static string[] GetTable()
@@ -46,7 +46,7 @@ namespace TargetClearCS
                 for (int i = 0; i < values.Count; i++) for (int j = 0; j < values[i].Length; j++) if (values[i][j] == null) values[i][j] = string.Empty;
                 for (int i = 0; i < titles.Length; i++) titles[i] = $" {titles[i].PadLeft(widest[i])} ";
                 foreach (var i in values) for (int j = 0; j < i.Length; j++) i[j] = $" {i[j].PadLeft(widest[j])} ";
-                List<string> output = new List<string>() { titles.Aggregate(string.Empty, (i,x) => $"{i}|{x}") };
+                List<string> output = new List<string>() { titles.Aggregate(string.Empty, (i, x) => $"{i}|{x}") };
                 output.Add(new string('=', output.Last().Length));
                 foreach (var i in values)
                 {
@@ -82,14 +82,29 @@ namespace TargetClearCS
                 }
                 return returner.TrimEnd(',') + "]";
             }
+            if (input is Dictionary<string, int>)
+            {
+                Dictionary<string, int> formInput = (Dictionary<string, int>)input;
+                string returner = "[";
+                foreach (KeyValuePair<string, int> i in formInput)
+                {
+                    returner += $"{{{Format(i)}}},";
+                }
+                return returner.TrimEnd(',') + "]";
+            }
+            if (input is KeyValuePair<string, int>)
+            {
+                KeyValuePair<string, int> formInput = (KeyValuePair<string, int>)input;
+                return $"{formInput.Key} : {formInput.Value}";
+            }
             return input.ToString();
         }
         public static void Open(string write, params (string, object)[] parameters)
         {
-            using (StreamWriter sw = new StreamWriter(name,true))
+            using (StreamWriter sw = new StreamWriter(name, true))
             {
                 sw.WriteLine($"{indent}RUN {write}");
-                foreach ((string,object) p in parameters)
+                foreach ((string, object) p in parameters)
                 {
                     sw.WriteLine($"{indent}PARAM '{p.Item1}' : {p.Item2.GetType().Name} '{Format(p.Item2)}'");
                 }
@@ -210,9 +225,11 @@ namespace TargetClearCS
 
         static void PlayGame(List<int> Targets, List<int> NumbersAllowed, bool TrainingGame, int MaxTarget, int MaxNumber)
         {
-            Trace.Open("PlayGame", ("Targets",Targets), ("NumbersAllowed", NumbersAllowed), ("TrainingGame", TrainingGame), ("MaxTarget", MaxTarget), ("MaxNumber", MaxNumber));
+            Trace.Open("PlayGame", ("Targets", Targets), ("NumbersAllowed", NumbersAllowed), ("TrainingGame", TrainingGame), ("MaxTarget", MaxTarget), ("MaxNumber", MaxNumber));
             int Score = 0;
+            Trace.Table.Became("Score", Score);
             bool GameOver = false;
+            Trace.Table.Became("PlayGame.GameOver", GameOver);
             string UserInput;
             List<string> UserInputInRPN;
             while (!GameOver)
@@ -220,23 +237,28 @@ namespace TargetClearCS
                 DisplayState(Targets, NumbersAllowed, Score);
                 Trace.Write("Enter an expression: ");
                 UserInput = Trace.ReadLine();
+                Trace.Table.Became("UserInput", UserInput);
                 Trace.WriteLine();
                 if (CheckIfUserInputValid(UserInput))
                 {
                     UserInputInRPN = ConvertToRPN(UserInput);
+                    Trace.Table.Became("UserInputInRPN", UserInputInRPN);
                     if (CheckNumbersUsedAreAllInNumbersAllowed(NumbersAllowed, UserInputInRPN, MaxNumber))
                     {
                         if (CheckIfUserInputEvaluationIsATarget(Targets, UserInputInRPN, ref Score))
                         {
                             RemoveNumbersUsed(UserInput, MaxNumber, NumbersAllowed);
                             NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber);
+                            Trace.Table.Became("NumbersAllowed", NumbersAllowed);
                         }
                     }
                 }
                 Score--;
+                Trace.Table.Became("Score", Score);
                 if (Targets[0] != -1)
                 {
                     GameOver = true;
+                    Trace.Table.Became("PlayGame.GameOver", GameOver);
                 }
                 else
                 {
@@ -252,16 +274,22 @@ namespace TargetClearCS
         {
             Trace.Open("CheckIfUserInputEvaluationIsATarget", ("Targets", Targets), ("UserInputInRPN", UserInputInRPN), ("Score", Score));
             int UserInputEvaluation = EvaluateRPN(UserInputInRPN);
+            Trace.Table.Became("UserInputEvaluation", UserInputEvaluation);
             bool UserInputEvaluationIsATarget = false;
+            Trace.Table.Became("UserInputEvaluationIsATarget", UserInputEvaluationIsATarget);
             if (UserInputEvaluation != -1)
             {
-                for (int Count = 0; Count < Targets.Count; Count++)
+                Trace.Table.Became("CIUIEIAT.Count", 0);
+                for (int Count = 0; Count < Targets.Count; Trace.Table.Set("CIUIEIAT.Count", ref Count, Count + 1))
                 {
                     if (Targets[Count] == UserInputEvaluation)
                     {
                         Score += 2;
+                        Trace.Table.Became("Score", Score);
                         Targets[Count] = -1;
+                        Trace.Table.Became("Targets", Targets);
                         UserInputEvaluationIsATarget = true;
+                        Trace.Table.Became("UserInputEvaluationIsATarget", UserInputEvaluationIsATarget);
                     }
                 }
             }
@@ -273,13 +301,16 @@ namespace TargetClearCS
         {
             Trace.Open("RemoveNumbersUsed", ("UserInput", UserInput), ("MaxNumber", MaxNumber), ("NumbersAllowed", NumbersAllowed));
             List<string> UserInputInRPN = ConvertToRPN(UserInput);
+            Trace.Table.Became("UserInputInRPN", UserInputInRPN);
             foreach (string Item in UserInputInRPN)
             {
+                Trace.Table.Became("RemoveNumbersUsed.Foreach.Item", Item);
                 if (CheckValidNumber(Item, MaxNumber))
                 {
                     if (NumbersAllowed.Contains(Convert.ToInt32(Item)))
                     {
                         NumbersAllowed.Remove(Convert.ToInt32(Item));
+                        Trace.Table.Became("NumbersAllowed", NumbersAllowed);
                     }
                 }
             }
@@ -289,18 +320,23 @@ namespace TargetClearCS
         static void UpdateTargets(List<int> Targets, bool TrainingGame, int MaxTarget)
         {
             Trace.Open("UpdateTargets", ("Targets", Targets), ("TrainingGame", TrainingGame), ("MaxTarget", MaxTarget));
-            for (int Count = 0; Count < Targets.Count - 1; Count++)
+            Trace.Table.Became("UpdateTargets.Count", 0);
+            for (int Count = 0; Count < Targets.Count - 1; Trace.Table.Set("UpdateTargets.Count", ref Count, Count + 1))
             {
                 Targets[Count] = Targets[Count + 1];
+                Trace.Table.Became("Targets", Targets);
             }
             Targets.RemoveAt(Targets.Count - 1);
+            Trace.Table.Became("Targets", Targets);
             if (TrainingGame)
             {
                 Targets.Add(Targets[Targets.Count - 1]);
+                Trace.Table.Became("Targets", Targets);
             }
             else
             {
                 Targets.Add(GetTarget(MaxTarget));
+                Trace.Table.Became("Targets", Targets);
             }
             Trace.Close();
         }
@@ -309,21 +345,25 @@ namespace TargetClearCS
         {
             Trace.Open("CheckNumbersUsedAreAllInNumbersAllowed", ("NumbersAllowed", NumbersAllowed), ("UserInputInRPN", UserInputInRPN), ("MaxNumber", MaxNumber));
             List<int> Temp = new List<int>();
+            Trace.Table.Became("CNUAAINA.Temp", Temp);
             foreach (int Item in NumbersAllowed)
             {
                 Temp.Add(Item);
+                Trace.Table.Became("CNUAAINA.Temp", Temp);
             }
             foreach (string Item in UserInputInRPN)
             {
+                Trace.Table.Became("CNUAAINA.Foreach.Item", Item);
                 if (CheckValidNumber(Item, MaxNumber))
                 {
                     if (Temp.Contains(Convert.ToInt32(Item)))
                     {
                         Temp.Remove(Convert.ToInt32(Item));
+                        Trace.Table.Became("CNUAAINA.Temp", Temp);
                     }
                     else
                     {
-                        Trace.Return(("n/a",false));
+                        Trace.Return(("n/a", false));
                         return false;
                     }
                 }
@@ -338,6 +378,7 @@ namespace TargetClearCS
             if (Regex.IsMatch(Item, "^[0-9]+$"))
             {
                 int ItemAsInteger = Convert.ToInt32(Item);
+                Trace.Table.Became("CheckValidNumber.ItemAsInteger", ItemAsInteger);
                 if (ItemAsInteger > 0 && ItemAsInteger <= MaxNumber)
                 {
                     Trace.Return(("n/a", true));
@@ -385,6 +426,7 @@ namespace TargetClearCS
             Trace.Write("|");
             foreach (int T in Targets)
             {
+                Trace.Table.Became("DisplayTargets.Foreach.T", T);
                 if (T == -1)
                 {
                     Trace.Write(" ");
@@ -404,39 +446,55 @@ namespace TargetClearCS
         {
             Trace.Open("ConvertToRPN", ("UserInput", UserInput));
             int Position = 0;
+            Trace.Table.Became("ConvertToRPN.Position", Position);
             Dictionary<string, int> Precedence = new Dictionary<string, int>
             {
                 { "+", 2 }, { "-", 2 }, { "*", 4 }, { "/", 4 }
             };
+            Trace.Table.Became("ConvertToRPN.Precedence", Precedence);
             List<string> Operators = new List<string>();
+            Trace.Table.Became("ConvertToRPN.Operators", Operators);
             int Operand = GetNumberFromUserInput(UserInput, ref Position);
+            Trace.Table.Became("ConvertToRPN.Operand", Operand);
             List<string> UserInputInRPN = new List<string> { Operand.ToString() };
+            Trace.Table.Became("UserInputInRPN", UserInputInRPN);
             Operators.Add(UserInput[Position - 1].ToString());
+            Trace.Table.Became("ConvertToRPN.Operators", Operators);
             while (Position < UserInput.Length)
             {
                 Operand = GetNumberFromUserInput(UserInput, ref Position);
+                Trace.Table.Became("ConvertToRPN.Operand", Operand);
                 UserInputInRPN.Add(Operand.ToString());
+                Trace.Table.Became("UserInputInRPN", UserInputInRPN);
                 if (Position < UserInput.Length)
                 {
                     string CurrentOperator = UserInput[Position - 1].ToString();
+                    Trace.Table.Became("ConvertToRPN.CurrentOperator", CurrentOperator);
                     while (Operators.Count > 0 && Precedence[Operators[Operators.Count - 1]] > Precedence[CurrentOperator])
                     {
                         UserInputInRPN.Add(Operators[Operators.Count - 1]);
+                        Trace.Table.Became("UserInputInRPN", UserInputInRPN);
                         Operators.RemoveAt(Operators.Count - 1);
+                        Trace.Table.Became("ConvertToRPN.Operators", Operators);
                     }
                     if (Operators.Count > 0 && Precedence[Operators[Operators.Count - 1]] == Precedence[CurrentOperator])
                     {
                         UserInputInRPN.Add(Operators[Operators.Count - 1]);
+                        Trace.Table.Became("UserInputInRPN", UserInputInRPN);
                         Operators.RemoveAt(Operators.Count - 1);
+                        Trace.Table.Became("ConvertToRPN.Operators", Operators);
                     }
                     Operators.Add(CurrentOperator);
+                    Trace.Table.Became("ConvertToRPN.Operators", Operators);
                 }
                 else
                 {
                     while (Operators.Count > 0)
                     {
                         UserInputInRPN.Add(Operators[Operators.Count - 1]);
+                        Trace.Table.Became("UserInputInRPN", UserInputInRPN);
                         Operators.RemoveAt(Operators.Count - 1);
+                        Trace.Table.Became("ConvertToRPN.Operators", Operators);
                     }
                 }
             }
@@ -448,35 +506,49 @@ namespace TargetClearCS
         {
             Trace.Open("EvaluateRPN", ("UserInputInRPN", UserInputInRPN));
             List<string> S = new List<string>();
+            Trace.Table.Became("EvaluateRPN.S", S);
             while (UserInputInRPN.Count > 0)
             {
                 while (!"+-*/".Contains(UserInputInRPN[0]))
                 {
                     S.Add(UserInputInRPN[0]);
+                    Trace.Table.Became("EvaluateRPN.S", S);
                     UserInputInRPN.RemoveAt(0);
+                    Trace.Table.Became("UserInputInRPN", UserInputInRPN);
                 }
                 double Num2 = Convert.ToDouble(S[S.Count - 1]);
+                Trace.Table.Became("EvaluateRPN.Num2", Num2);
                 S.RemoveAt(S.Count - 1);
+                Trace.Table.Became("EvaluateRPN.S", S);
                 double Num1 = Convert.ToDouble(S[S.Count - 1]);
+                Trace.Table.Became("EvaluateRPN.Num1", Num1);
                 S.RemoveAt(S.Count - 1);
+                Trace.Table.Became("EvaluateRPN.S", S);
                 double Result = 0;
+                Trace.Table.Became("EvaluateRPN.Result", Result);
                 switch (UserInputInRPN[0])
                 {
                     case "+":
                         Result = Num1 + Num2;
+                        Trace.Table.Became("EvaluateRPN.Result", Result);
                         break;
                     case "-":
                         Result = Num1 - Num2;
+                        Trace.Table.Became("EvaluateRPN.Result", Result);
                         break;
                     case "*":
                         Result = Num1 * Num2;
+                        Trace.Table.Became("EvaluateRPN.Result", Result);
                         break;
                     case "/":
                         Result = Num1 / Num2;
+                        Trace.Table.Became("EvaluateRPN.Result", Result);
                         break;
                 }
                 UserInputInRPN.RemoveAt(0);
+                Trace.Table.Became("UserInputInRPN", UserInputInRPN);
                 S.Add(Convert.ToString(Result));
+                Trace.Table.Became("EvaluateRPN.S", S);
             }
             if (Convert.ToDouble(S[0]) - Math.Truncate(Convert.ToDouble(S[0])) == 0.0)
             {
@@ -494,21 +566,27 @@ namespace TargetClearCS
         {
             Trace.Open("GetNumberFromUserInput", ("UserInput", UserInput), ("Position", Position));
             string Number = "";
+            Trace.Table.Became("GNFUI.Number", Number);
             bool MoreDigits = true;
+            Trace.Table.Became("GNFUI.MoreDigits", MoreDigits);
             while (MoreDigits)
             {
                 if (Regex.IsMatch(UserInput[Position].ToString(), "[0-9]"))
                 {
                     Number += UserInput[Position];
+                    Trace.Table.Became("GNFUI.Number", Number);
                 }
                 else
                 {
                     MoreDigits = false;
+                    Trace.Table.Became("GNFUI.MoreDigits", MoreDigits);
                 }
                 Position++;
+                Trace.Table.Became("ConvertToRPN.Position", Position);
                 if (Position == UserInput.Length)
                 {
                     MoreDigits = false;
+                    Trace.Table.Became("GNFUI.MoreDigits", MoreDigits);
                 }
             }
             if (Number == "")
@@ -526,14 +604,14 @@ namespace TargetClearCS
         static bool CheckIfUserInputValid(string UserInput)
         {
             Trace.Open("CheckIfUserInputValid", ("UserInput", UserInput));
-            Trace.Return(("n/a",Regex.IsMatch(UserInput, @"^([0-9]+[\+\-\*\/])+[0-9]+$")));
+            Trace.Return(("n/a", Regex.IsMatch(UserInput, @"^([0-9]+[\+\-\*\/])+[0-9]+$")));
             return Regex.IsMatch(UserInput, @"^([0-9]+[\+\-\*\/])+[0-9]+$");
         }
 
         static int GetTarget(int MaxTarget)
         {
             Trace.Open("GetTarget", ("MaxTarget", MaxTarget));
-            int returned = RGen.Next(MaxTarget) + 1;
+            int returned = RGen.Next(MaxTarget) + 1; //Not traced, recoded for trace
             Trace.Return(("n/a", returned));
             return returned;
         }
@@ -541,7 +619,7 @@ namespace TargetClearCS
         static int GetNumber(int MaxNumber)
         {
             Trace.Open("GetNumber", ("MaxNumber", MaxNumber));
-            int returned = RGen.Next(MaxNumber) + 1;
+            int returned = RGen.Next(MaxNumber) + 1; //Not traced, recoded for trace
             Trace.Return(("n/a", returned));
             return returned;
         }
@@ -550,13 +628,18 @@ namespace TargetClearCS
         {
             Trace.Open("CreateTargets", ("SizeOfTargets", SizeOfTargets), ("MaxTarget", MaxTarget));
             List<int> Targets = new List<int>();
-            for (int Count = 1; Count <= 5; Count++)
+            Trace.Table.Became("Targets", Targets);
+            Trace.Table.Became("CreateTargets.Count", 1);
+            for (int Count = 1; Count <= 5; Trace.Table.Set("CreateTargets.Count", ref Count, Count + 1))
             {
                 Targets.Add(-1);
+                Trace.Table.Became("Targets", Targets);
             }
-            for (int Count = 1; Count <= SizeOfTargets - 5; Count++)
+            Trace.Table.Became("CreateTargets.Count", 1);
+            for (int Count = 1; Count <= SizeOfTargets - 5; Trace.Table.Set("CreateTargets.Count", ref Count, Count + 1))
             {
                 Targets.Add(GetTarget(MaxTarget));
+                Trace.Table.Became("Targets", Targets);
             }
             Trace.Return(("Targets", Targets));
             return Targets;
