@@ -3,124 +3,32 @@
 //written by the AQA Programmer Team
 //developed in the Visual Studio Community Edition programming environment
 
+// not tracing, but I can't be bothered to make a new repository
+
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
 namespace TargetClearCS
 {
-    public static class Trace
-    {
-        const string indentString = "  |  ";
-        static string indent = "";
-        static string name = $"Game started {DateTime.Now.Hour}_{DateTime.Now.Minute}_{DateTime.Now.Second} on {DateTime.Now.Date.Day}_{DateTime.Now.Date.Month}.txt";
-
-        public static string Format(object input)
-        {
-            if (input is List<int>)
-            {
-                List<int> formInput = (List<int>)input;
-                string returner = "[";
-                foreach (object i in formInput)
-                {
-                    returner += $"'{Format(i)}',";
-                }
-                return returner.TrimEnd(',') + "]";
-            }
-            if (input is List<string>)
-            {
-                List<string> formInput = (List<string>)input;
-                string returner = "[";
-                foreach (object i in formInput)
-                {
-                    returner += $"'{Format(i)}',";
-                }
-                return returner.TrimEnd(',') + "]";
-            }
-            return input.ToString();
-        }
-        public static void Open(string write, params (string, object)[] parameters)
-        {
-            using (StreamWriter sw = new StreamWriter(name,true))
-            {
-                sw.WriteLine($"{indent}RUN {write}");
-                foreach ((string,object) p in parameters)
-                {
-                    sw.WriteLine($"{indent}PARAM '{p.Item1}' : {p.Item2.GetType().Name} '{Format(p.Item2)}'");
-                }
-                indent += indentString;
-            }
-        }
-        public static string ReadLine()
-        {
-            string userInput = Console.ReadLine();
-            using (StreamWriter sw = new StreamWriter(name, true))
-            {
-                sw.WriteLine($"{indent}INPUT '{userInput}'");
-            }
-            return userInput;
-        }
-        public static void Write(object wrote)
-        {
-            Console.Write(wrote);
-            using (StreamWriter sw = new StreamWriter(name, true))
-            {
-                sw.WriteLine($"{indent}OUTPUT '{wrote}'");
-            }
-        }
-        public static void WriteLine()
-        {
-            WriteLine("");
-        }
-        public static void WriteLine(object wrote)
-        {
-            Console.WriteLine(wrote);
-            using (StreamWriter sw = new StreamWriter(name, true))
-            {
-                sw.WriteLine($"{indent}OUTPUT '{wrote}\\n'");
-            }
-        }
-        public static void Close()
-        {
-            indent = indent.Substring(indentString.Length);
-        }
-        public static void Return((string, object) returned)
-        {
-            indent = indent.Substring(indentString.Length);
-            using (StreamWriter sw = new StreamWriter(name, true))
-            {
-                if (returned.Item1 == "n/a")
-                {
-                    sw.WriteLine($"{indent}RETURNED {returned.Item2.GetType().Name} '{Format(returned.Item2)}'");
-
-                }
-                else
-                {
-                    sw.WriteLine($"{indent}RETURNED '{returned.Item1}' : {returned.Item2.GetType().Name} '{Format(returned.Item2)}'");
-
-                }
-            }
-        }
-    }
     internal class Program
     {
         static Random RGen = new Random();
 
         static void Main(string[] args)
         {
-            Trace.Open("Main");
             List<int> NumbersAllowed = new List<int>();
             List<int> Targets;
             int MaxNumberOfTargets = 20;
+            int HandSize = 5;
             int MaxTarget;
             int MaxNumber;
             bool TrainingGame;
-            Trace.Write("Enter y to play the training game, anything else to play a random game: ");
-            string Choice = Trace.ReadLine().ToLower();
-            Trace.WriteLine();
+            Console.Write("Enter y to play the training game, anything else to play a random game: ");
+            string Choice = Console.ReadLine().ToLower();
+            Console.WriteLine();
             if (Choice == "y")
             {
                 MaxNumber = 1000;
@@ -135,40 +43,83 @@ namespace TargetClearCS
                 TrainingGame = false;
                 Targets = CreateTargets(MaxNumberOfTargets, MaxTarget);
             }
-            NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber);
-            PlayGame(Targets, NumbersAllowed, TrainingGame, MaxTarget, MaxNumber);
-            Trace.ReadLine();
-            Trace.Close();
+            NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber, HandSize);
+            PlayGame(Targets, NumbersAllowed, TrainingGame, MaxTarget, MaxNumber, HandSize);
+            Console.ReadLine();
         }
 
-        static void PlayGame(List<int> Targets, List<int> NumbersAllowed, bool TrainingGame, int MaxTarget, int MaxNumber)
+        static void PlayGame(List<int> Targets, List<int> NumbersAllowed, bool TrainingGame, int MaxTarget, int MaxNumber, int HandSize)
         {
-            Trace.Open("PlayGame", ("Targets",Targets), ("NumbersAllowed", NumbersAllowed), ("TrainingGame", TrainingGame), ("MaxTarget", MaxTarget), ("MaxNumber", MaxNumber));
             int Score = 0;
+            int farmCount = 0;
             bool GameOver = false;
             string UserInput;
             List<string> UserInputInRPN;
             while (!GameOver)
             {
-                DisplayState(Targets, NumbersAllowed, Score);
-                Trace.Write("Enter an expression: ");
-                UserInput = Trace.ReadLine();
-                Trace.WriteLine();
+                Score += farmCount;
+                DisplayState(Targets, NumbersAllowed, Score, farmCount);
+                if (Score >= 2 + farmCount && Targets[farmCount] == -1 && farmCount != 0)
+                {
+                    Console.WriteLine($"Place farmland?: {2 + farmCount} points (type y to place): ");
+                    if (Console.ReadLine() == "y")
+                    {
+                        Score -= 2 + farmCount;
+                        farmCount++;
+                        DisplayState(Targets, NumbersAllowed, Score, farmCount);
+                    }
+                }
+                if (Score >= 5*(HandSize-1))
+                {
+                    Console.WriteLine($"Grow army?: {5 * (HandSize - 1)} points (type y to grow): ");
+                    if (Console.ReadLine() == "y")
+                    {
+                        Score -= 5 * (HandSize - 1);
+                        HandSize++;
+                        NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber, HandSize);
+                        DisplayState(Targets, NumbersAllowed, Score, farmCount);
+                    }
+                }
+                Console.Write("Enter an expression: ");
+                UserInput = Console.ReadLine();
+                Console.WriteLine();
                 if (CheckIfUserInputValid(UserInput))
                 {
                     UserInputInRPN = ConvertToRPN(UserInput);
                     if (CheckNumbersUsedAreAllInNumbersAllowed(NumbersAllowed, UserInputInRPN, MaxNumber))
                     {
-                        if (CheckIfUserInputEvaluationIsATarget(Targets, UserInputInRPN, ref Score))
+                        int killsLast = CheckIfUserInputEvaluationIsATarget(Targets, UserInputInRPN, ref Score);
+                        if (killsLast != 0)
                         {
                             RemoveNumbersUsed(UserInput, MaxNumber, NumbersAllowed);
-                            NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber);
+                            if (killsLast > 1)
+                            {
+                                Announce("So many dead! A plague is festering!");
+                                if (HandSize > 2)
+                                {
+                                    HandSize--;
+                                    Announce("Death in your army from the plague!");
+                                }
+                            }
+                            NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber, HandSize);
                         }
                     }
                 }
                 Score--;
+                if (farmCount != 0 && Targets[farmCount] != -1)
+                {
+                    farmCount = 0;
+                    Announce("Your farmland has been trampled! -20 points");
+                    Score -= 20;
+                }
                 if (Targets[0] != -1)
                 {
+                    Announce("The barbarians have overrun you!");
+                    GameOver = true;
+                }
+                else if (Score < 0)
+                {
+                    Announce("Your treasuries run dry!");
                     GameOver = true;
                 }
                 else
@@ -176,16 +127,22 @@ namespace TargetClearCS
                     UpdateTargets(Targets, TrainingGame, MaxTarget);
                 }
             }
-            Trace.WriteLine("Game over!");
+            Console.WriteLine("Game over!");
             DisplayScore(Score);
-            Trace.Close();
         }
 
-        static bool CheckIfUserInputEvaluationIsATarget(List<int> Targets, List<string> UserInputInRPN, ref int Score)
+        static void Announce(string announcement)
         {
-            Trace.Open("CheckIfUserInputEvaluationIsATarget", ("Targets", Targets), ("UserInputInRPN", UserInputInRPN), ("Score", Score));
+            ConsoleColor fg = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine(announcement);
+            Console.ForegroundColor = fg;
+        }
+
+        static int CheckIfUserInputEvaluationIsATarget(List<int> Targets, List<string> UserInputInRPN, ref int Score)
+        {
             int UserInputEvaluation = EvaluateRPN(UserInputInRPN);
-            bool UserInputEvaluationIsATarget = false;
+            int kills = 0;
             if (UserInputEvaluation != -1)
             {
                 for (int Count = 0; Count < Targets.Count; Count++)
@@ -194,17 +151,15 @@ namespace TargetClearCS
                     {
                         Score += 2;
                         Targets[Count] = -1;
-                        UserInputEvaluationIsATarget = true;
+                        kills++;
                     }
                 }
             }
-            Trace.Return(("UserInputEvaluationIsATarget", UserInputEvaluationIsATarget));
-            return UserInputEvaluationIsATarget;
+            return kills;
         }
 
         static void RemoveNumbersUsed(string UserInput, int MaxNumber, List<int> NumbersAllowed)
         {
-            Trace.Open("RemoveNumbersUsed", ("UserInput", UserInput), ("MaxNumber", MaxNumber), ("NumbersAllowed", NumbersAllowed));
             List<string> UserInputInRPN = ConvertToRPN(UserInput);
             foreach (string Item in UserInputInRPN)
             {
@@ -216,12 +171,10 @@ namespace TargetClearCS
                     }
                 }
             }
-            Trace.Close();
         }
 
         static void UpdateTargets(List<int> Targets, bool TrainingGame, int MaxTarget)
         {
-            Trace.Open("UpdateTargets", ("Targets", Targets), ("TrainingGame", TrainingGame), ("MaxTarget", MaxTarget));
             for (int Count = 0; Count < Targets.Count - 1; Count++)
             {
                 Targets[Count] = Targets[Count + 1];
@@ -235,12 +188,10 @@ namespace TargetClearCS
             {
                 Targets.Add(GetTarget(MaxTarget));
             }
-            Trace.Close();
         }
 
         static bool CheckNumbersUsedAreAllInNumbersAllowed(List<int> NumbersAllowed, List<string> UserInputInRPN, int MaxNumber)
         {
-            Trace.Open("CheckNumbersUsedAreAllInNumbersAllowed", ("NumbersAllowed", NumbersAllowed), ("UserInputInRPN", UserInputInRPN), ("MaxNumber", MaxNumber));
             List<int> Temp = new List<int>();
             foreach (int Item in NumbersAllowed)
             {
@@ -256,86 +207,89 @@ namespace TargetClearCS
                     }
                     else
                     {
-                        Trace.Return(("n/a",false));
                         return false;
                     }
                 }
             }
-            Trace.Return(("n/a", true));
             return true;
         }
 
         static bool CheckValidNumber(string Item, int MaxNumber)
         {
-            Trace.Open("CheckValidNumber", ("Item", Item), ("MaxNumber", MaxNumber));
             if (Regex.IsMatch(Item, "^[0-9]+$"))
             {
                 int ItemAsInteger = Convert.ToInt32(Item);
                 if (ItemAsInteger > 0 && ItemAsInteger <= MaxNumber)
                 {
-                    Trace.Return(("n/a", true));
                     return true;
                 }
             }
-            Trace.Return(("n/a", false));
             return false;
         }
 
-        static void DisplayState(List<int> Targets, List<int> NumbersAllowed, int Score)
+        static void DisplayState(List<int> Targets, List<int> NumbersAllowed, int Score, int farmCount)
         {
-            Trace.Open("DisplayState", ("Targets", Targets), ("NumbersAllowed", NumbersAllowed), ("Score", Score));
             DisplayTargets(Targets);
+            Console.Write("|");
+            for (int i = 0; i < farmCount; i++)
+            {
+                Console.Write("#");
+                Console.Write("|");
+            }
+            Console.WriteLine();
+            Console.WriteLine();
             DisplayNumbersAllowed(NumbersAllowed);
             DisplayScore(Score);
-            Trace.Close();
         }
 
         static void DisplayScore(int Score)
         {
-            Trace.Open("DisplayScore", ("Score", Score));
-            Trace.WriteLine($"Current score: {Score}");
-            Trace.WriteLine();
-            Trace.WriteLine();
-            Trace.Close();
+            Console.WriteLine($"Current score: {Score}");
+            Console.WriteLine();
+            Console.WriteLine();
         }
 
         static void DisplayNumbersAllowed(List<int> NumbersAllowed)
         {
-            Trace.Open("DisplayNumbersAllowed", ("NumbersAllowed", NumbersAllowed));
-            Trace.Write("Numbers available: ");
+            Console.Write("Numbers available: ");
             foreach (int Number in NumbersAllowed)
             {
-                Trace.Write($"{Number}  ");
+                Console.Write($"{Number}  ");
             }
-            Trace.WriteLine();
-            Trace.WriteLine();
-            Trace.Close();
+            Console.WriteLine();
+            Console.WriteLine();
         }
 
         static void DisplayTargets(List<int> Targets)
         {
-            Trace.Open("DisplayTargets", ("Targets", Targets));
-            Trace.Write("|");
+            Console.Write("|");
             foreach (int T in Targets)
             {
                 if (T == -1)
                 {
-                    Trace.Write(" ");
+                    Console.Write(" ");
                 }
                 else
                 {
-                    Trace.Write(T);
+                    List<int> without = Targets.ToArray().ToList();
+                    without.Remove(T);
+                    ConsoleColor fg = Console.ForegroundColor;
+                    if (Array.IndexOf(without.ToArray(), T) != -1)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                    }
+                    Console.Write(T);
+                    Console.ForegroundColor = fg;
+
                 }
-                Trace.Write("|");
+                Console.Write("|");
             }
-            Trace.WriteLine();
-            Trace.WriteLine();
-            Trace.Close();
+            Console.WriteLine();
+            Console.WriteLine();
         }
 
         static List<string> ConvertToRPN(string UserInput)
         {
-            Trace.Open("ConvertToRPN", ("UserInput", UserInput));
             int Position = 0;
             Dictionary<string, int> Precedence = new Dictionary<string, int>
             {
@@ -373,13 +327,11 @@ namespace TargetClearCS
                     }
                 }
             }
-            Trace.Return(("UserInputInRPN", UserInputInRPN));
             return UserInputInRPN;
         }
 
         static int EvaluateRPN(List<string> UserInputInRPN)
         {
-            Trace.Open("EvaluateRPN", ("UserInputInRPN", UserInputInRPN));
             List<string> S = new List<string>();
             while (UserInputInRPN.Count > 0)
             {
@@ -413,19 +365,16 @@ namespace TargetClearCS
             }
             if (Convert.ToDouble(S[0]) - Math.Truncate(Convert.ToDouble(S[0])) == 0.0)
             {
-                Trace.Return(("n/a", (int)Math.Truncate(Convert.ToDouble(S[0]))));
                 return (int)Math.Truncate(Convert.ToDouble(S[0]));
             }
             else
             {
-                Trace.Return(("n/a", -1));
                 return -1;
             }
         }
 
         static int GetNumberFromUserInput(string UserInput, ref int Position)
         {
-            Trace.Open("GetNumberFromUserInput", ("UserInput", UserInput), ("Position", Position));
             string Number = "";
             bool MoreDigits = true;
             while (MoreDigits)
@@ -446,42 +395,31 @@ namespace TargetClearCS
             }
             if (Number == "")
             {
-                Trace.Return(("n/a", -1));
                 return -1;
             }
             else
             {
-                Trace.Return(("n/a", Convert.ToInt32(Number)));
                 return Convert.ToInt32(Number);
             }
         }
 
         static bool CheckIfUserInputValid(string UserInput)
         {
-            Trace.Open("CheckIfUserInputValid", ("UserInput", UserInput));
-            Trace.Return(("n/a",Regex.IsMatch(UserInput, @"^([0-9]+[\+\-\*\/])+[0-9]+$")));
             return Regex.IsMatch(UserInput, @"^([0-9]+[\+\-\*\/])+[0-9]+$");
         }
 
         static int GetTarget(int MaxTarget)
         {
-            Trace.Open("GetTarget", ("MaxTarget", MaxTarget));
-            int returned = RGen.Next(MaxTarget) + 1;
-            Trace.Return(("n/a", returned));
-            return returned;
+            return RGen.Next(MaxTarget) + 1;
         }
 
         static int GetNumber(int MaxNumber)
         {
-            Trace.Open("GetNumber", ("MaxNumber", MaxNumber));
-            int returned = RGen.Next(MaxNumber) + 1;
-            Trace.Return(("n/a", returned));
-            return returned;
+            return RGen.Next(MaxNumber) + 1;
         }
 
         static List<int> CreateTargets(int SizeOfTargets, int MaxTarget)
         {
-            Trace.Open("CreateTargets", ("SizeOfTargets", SizeOfTargets), ("MaxTarget", MaxTarget));
             List<int> Targets = new List<int>();
             for (int Count = 1; Count <= 5; Count++)
             {
@@ -489,27 +427,35 @@ namespace TargetClearCS
             }
             for (int Count = 1; Count <= SizeOfTargets - 5; Count++)
             {
-                Targets.Add(GetTarget(MaxTarget));
+                int add = GetTarget(MaxTarget);
+                if (Targets.Contains(add))
+                {
+                    Count--;
+                }
+                else
+                {
+                    Targets.Add(add);
+                }
             }
-            Trace.Return(("Targets", Targets));
             return Targets;
         }
 
-        static List<int> FillNumbers(List<int> NumbersAllowed, bool TrainingGame, int MaxNumber)
+        static List<int> FillNumbers(List<int> NumbersAllowed, bool TrainingGame, int MaxNumber, int HandSize)
         {
-            Trace.Open("FillNumbers", ("NumbersAllowed", NumbersAllowed), ("TrainingGame", TrainingGame), ("MaxNumber", MaxNumber));
             if (TrainingGame)
             {
-                Trace.Return(("n/a", new List<int> { 2, 3, 2, 8, 512 }));
                 return new List<int> { 2, 3, 2, 8, 512 };
             }
             else
             {
-                while (NumbersAllowed.Count < 5)
+                while (NumbersAllowed.Count < HandSize)
                 {
                     NumbersAllowed.Add(GetNumber(MaxNumber));
                 }
-                Trace.Return(("NumbersAllowed", NumbersAllowed));
+                while (NumbersAllowed.Count > HandSize)
+                {
+                    NumbersAllowed.RemoveAt(RGen.Next(NumbersAllowed.Count));
+                }
                 return NumbersAllowed;
             }
         }
