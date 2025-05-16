@@ -57,7 +57,7 @@ namespace TargetClearCS
 
         static void PlayGame(List<int> Targets, List<int> NumbersAllowed, bool TrainingGame, int MaxTarget, int MaxNumber, int armyCount)
         {
-            int score = -1;
+            int daysSurvived = -1;
             int supplies = 0;
             int farmCount = 0;
             int wallCount = 0;
@@ -68,7 +68,7 @@ namespace TargetClearCS
             List<string> UserInputInRPN;
             while (!GameOver)
             {
-                score++;
+                daysSurvived++;
                 attackType = Attack.Archers;
                 supplies += farmCount - Math.Max((armyCount - 5) * (armyCount - 4) / 2, 0);
                 DisplayState(Targets, NumbersAllowed, supplies, farmCount, wallCount, attackType);
@@ -139,11 +139,11 @@ namespace TargetClearCS
                     UserInputInRPN = ConvertToRPN(UserInput);
                     if (CheckNumbersUsedAreAllInNumbersAllowed(NumbersAllowed, UserInputInRPN, MaxNumber))
                     {
-                        int killsLast = CheckIfUserInputEvaluationIsATarget(Targets, UserInputInRPN, attackType, ref supplies);
-                        if (killsLast != 0)
+                        HashSet<int> killsLast = CheckIfUserInputEvaluationIsATarget(Targets, UserInputInRPN, attackType, ref supplies);
+                        if (killsLast.Count != 0)
                         {
                             RemoveNumbersUsed(UserInput, MaxNumber, NumbersAllowed);
-                            if (killsLast > 1)
+                            if (killsLast.Count > 1)
                             {
                                 Announce("So many dead! A plague is festering!");
                                 if (armyCount > 2)
@@ -151,6 +151,21 @@ namespace TargetClearCS
                                     armyCount--;
                                     Announce("Death in your army from the plague!");
                                 }
+                                HashSet<int> plaguedCount = new HashSet<int>();
+                                foreach (int kill in killsLast)
+                                {
+                                    if (kill != 0 && Targets[kill - 1] > 10)
+                                    {
+                                        Targets[kill - 1] /= 2;
+                                        plaguedCount.Add(kill - 1);
+                                    }
+                                    if (kill != Targets.Count - 1 && Targets[kill + 1] > 10)
+                                    {
+                                        Targets[kill + 1] /= 2;
+                                        plaguedCount.Add(kill + 1);
+                                    }
+                                }
+                                Announce($"The plague has weakened {plaguedCount.Count} barbarians.");
                             }
                             NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber, armyCount);
                         }
@@ -192,7 +207,7 @@ namespace TargetClearCS
                 }
             }
             Console.WriteLine("Game over!");
-            Console.WriteLine($"You survived the siege for {score} days.");
+            Console.WriteLine($"You survived the siege for {daysSurvived} days.");
         }
 
         static void Announce(string announcement)
@@ -230,10 +245,10 @@ namespace TargetClearCS
             ColourWrite($"{input}\n", fg, bg);
         }
 
-        static int CheckIfUserInputEvaluationIsATarget(List<int> Targets, List<string> UserInputInRPN, Attack attackType, ref int Score)
+        static HashSet<int> CheckIfUserInputEvaluationIsATarget(List<int> Targets, List<string> UserInputInRPN, Attack attackType, ref int Supplies)
         {
             int UserInputEvaluation = EvaluateRPN(UserInputInRPN);
-            int kills = 0;
+            HashSet<int> kills = new HashSet<int>();
             if (UserInputEvaluation != -1)
             {
                 if (attackType == Attack.Archers)
@@ -242,16 +257,16 @@ namespace TargetClearCS
                     {
                         if (Targets[Count] == UserInputEvaluation)
                         {
-                            Score += 2;
+                            Supplies += 2;
                             Targets[Count] = -1;
-                            kills++;
+                            kills.Add(Count);
                         }
                     }
-                    if (kills == 0)
+                    if (kills.Count == 0)
                     {
                         BattleReport("The archers have missed!");
                     }
-                    else if (kills == 1)
+                    else if (kills.Count == 1)
                     {
                         BattleReport("The archers have hit their mark!");
                     }
@@ -266,13 +281,13 @@ namespace TargetClearCS
                     {
                         if (Targets[Count] == UserInputEvaluation)
                         {
-                            Score += 2;
+                            Supplies += 2;
                             Targets[Count] = -1;
-                            kills++;
+                            kills.Add(Count);
                             break;
                         }
                     }
-                    if (kills == 0)
+                    if (kills.Count == 0)
                     {
                         BattleReport("The ballista has missed!");
                     }
@@ -354,12 +369,12 @@ namespace TargetClearCS
             return false;
         }
 
-        static void DisplayState(List<int> Targets, List<int> NumbersAllowed, int Score, int farmCount, int wallCount, Attack attack)
+        static void DisplayState(List<int> Targets, List<int> NumbersAllowed, int Supplies, int farmCount, int wallCount, Attack attack)
         {
             DisplayTargets(Targets, farmCount, wallCount, attack);
             Console.WriteLine();
             DisplayNumbersAllowed(NumbersAllowed);
-            DisplayScore(Score);
+            DisplayScore(Supplies);
             Console.WriteLine($"Currently attacking with {attack}");
         }
 
