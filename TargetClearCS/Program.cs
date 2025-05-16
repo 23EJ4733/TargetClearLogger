@@ -6,6 +6,7 @@
 // not tracing, but I can't be bothered to make a new repository
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -17,11 +18,17 @@ namespace TargetClearCS
     {
         static Random RGen = new Random();
 
+        enum Attack
+        {
+            Archers,
+            Ballista
+        }
+
         static void Main(string[] args)
         {
             List<int> NumbersAllowed = new List<int>();
             List<int> Targets;
-            int MaxNumberOfTargets = 20;
+            int StartingNumberOfTargets = 20;
             int HandSize = 5;
             int MaxTarget;
             int MaxNumber;
@@ -41,45 +48,89 @@ namespace TargetClearCS
                 MaxNumber = 10;
                 MaxTarget = 50;
                 TrainingGame = false;
-                Targets = CreateTargets(MaxNumberOfTargets, MaxTarget);
+                Targets = CreateTargets(StartingNumberOfTargets, MaxTarget);
             }
             NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber, HandSize);
             PlayGame(Targets, NumbersAllowed, TrainingGame, MaxTarget, MaxNumber, HandSize);
             Console.ReadLine();
         }
 
-        static void PlayGame(List<int> Targets, List<int> NumbersAllowed, bool TrainingGame, int MaxTarget, int MaxNumber, int HandSize)
+        static void PlayGame(List<int> Targets, List<int> NumbersAllowed, bool TrainingGame, int MaxTarget, int MaxNumber, int armyCount)
         {
-            int Score = 0;
+            int score = -1;
+            int supplies = 0;
             int farmCount = 0;
+            int wallCount = 0;
+            Attack attackType = Attack.Archers;
+
             bool GameOver = false;
             string UserInput;
             List<string> UserInputInRPN;
             while (!GameOver)
             {
-                Score += farmCount;
-                DisplayState(Targets, NumbersAllowed, Score, farmCount);
-                if (Score >= 2 + farmCount && Targets[farmCount] == -1 && farmCount != 0)
+                score++;
+                attackType = Attack.Archers;
+                supplies += farmCount - Math.Max((armyCount - 5) * (armyCount - 4) / 2, 0);
+                DisplayState(Targets, NumbersAllowed, supplies, farmCount, wallCount, attackType);
+                void DoStore()
                 {
-                    Console.WriteLine($"Place farmland?: {2 + farmCount} points (type y to place): ");
-                    if (Console.ReadLine() == "y")
+                    while (true)
                     {
-                        Score -= 2 + farmCount;
-                        farmCount++;
-                        DisplayState(Targets, NumbersAllowed, Score, farmCount);
+                        List<string> storeItems = new List<string>() { };
+                        if (supplies >= 2 + farmCount && Targets[farmCount] == -1)
+                        {
+                            Store($"Place farmland?: -{2 + farmCount} supplies (type f to place)");
+                            storeItems.Add("f");
+                        }
+                        if (supplies >= 5 * (armyCount - 1))
+                        {
+                            Store($"Grow army?: -{5 * (armyCount - 1)} supplies, -{armyCount - 4} supplies/turn (type a to grow)");
+                            storeItems.Add("a");
+                        }
+                        if (supplies >= Math.Max(4 * wallCount - farmCount, 6) && wallCount < farmCount)
+                        {
+                            Store($"Build wall?: -{Math.Max(4 * wallCount - farmCount, 6)} supplies (type w to build)");
+                            storeItems.Add("w");
+                        }
+                        if (attackType == Attack.Archers && supplies >= 4 + wallCount && wallCount != 0)
+                        {
+                            Store($"Arm ballista? (Hit only closest target this turn): -{4 + wallCount} supplies (type b to arm)");
+                            storeItems.Add("b");
+                        }
+                        if (storeItems.Count == 0) return;
+                        Store($"Enter anything else to continue from the store");
+
+                        string answer = Console.ReadLine();
+                        if (!storeItems.Contains(answer)) return;
+
+                        switch (answer)
+                        {
+                            case "a":
+                                supplies -= 5 * (armyCount - 1);
+                                armyCount++;
+                                NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber, armyCount);
+                                MaxTarget += Math.Max(armyCount - 3, 2);
+                                break;
+                            case "f":
+                                supplies -= 2 + farmCount;
+                                farmCount++;
+                                MaxTarget++;
+                                break;
+                            case "w":
+                                supplies -= Math.Max(4 * wallCount - farmCount, 6);
+                                wallCount++;
+                                MaxTarget++;
+                                break;
+                            case "b":
+                                supplies -= 4 + wallCount;
+                                attackType = Attack.Ballista;
+                                break;
+                        }
+
+                        DisplayState(Targets, NumbersAllowed, supplies, farmCount, wallCount, attackType);
                     }
                 }
-                if (Score >= 5*(HandSize-1))
-                {
-                    Console.WriteLine($"Grow army?: {5 * (HandSize - 1)} points (type y to grow): ");
-                    if (Console.ReadLine() == "y")
-                    {
-                        Score -= 5 * (HandSize - 1);
-                        HandSize++;
-                        NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber, HandSize);
-                        DisplayState(Targets, NumbersAllowed, Score, farmCount);
-                    }
-                }
+                DoStore();
                 Console.Write("Enter an expression: ");
                 UserInput = Console.ReadLine();
                 Console.WriteLine();
@@ -88,70 +139,146 @@ namespace TargetClearCS
                     UserInputInRPN = ConvertToRPN(UserInput);
                     if (CheckNumbersUsedAreAllInNumbersAllowed(NumbersAllowed, UserInputInRPN, MaxNumber))
                     {
-                        int killsLast = CheckIfUserInputEvaluationIsATarget(Targets, UserInputInRPN, ref Score);
+                        int killsLast = CheckIfUserInputEvaluationIsATarget(Targets, UserInputInRPN, attackType, ref supplies);
                         if (killsLast != 0)
                         {
                             RemoveNumbersUsed(UserInput, MaxNumber, NumbersAllowed);
                             if (killsLast > 1)
                             {
                                 Announce("So many dead! A plague is festering!");
-                                if (HandSize > 2)
+                                if (armyCount > 2)
                                 {
-                                    HandSize--;
+                                    armyCount--;
                                     Announce("Death in your army from the plague!");
                                 }
                             }
-                            NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber, HandSize);
+                            NumbersAllowed = FillNumbers(NumbersAllowed, TrainingGame, MaxNumber, armyCount);
                         }
                     }
                 }
-                Score--;
+
+                bool updateTargetsThisTurn = true;
+
+                supplies--;
                 if (farmCount != 0 && Targets[farmCount] != -1)
                 {
-                    farmCount = 0;
-                    Announce("Your farmland has been trampled! -20 points");
-                    Score -= 20;
+                    if (farmCount != wallCount)
+                    {
+                        Announce($"The barbarians are burning the crops! -{(farmCount - wallCount) * 2} supplies");
+                        supplies -= (farmCount - wallCount) * 2;
+                        farmCount = wallCount;
+                    }
+                    else
+                    {
+                        Announce($"Horror! The barbarians have breached the walls!");
+                        wallCount -= 1;
+                        updateTargetsThisTurn = false;
+                    }
                 }
+
                 if (Targets[0] != -1)
                 {
                     Announce("The barbarians have overrun you!");
                     GameOver = true;
                 }
-                else if (Score < 0)
+                else if (supplies < 0)
                 {
-                    Announce("Your treasuries run dry!");
+                    Announce("Your supplies have depleted!");
                     GameOver = true;
                 }
-                else
+                else if (updateTargetsThisTurn)
                 {
                     UpdateTargets(Targets, TrainingGame, MaxTarget);
                 }
             }
             Console.WriteLine("Game over!");
-            DisplayScore(Score);
+            Console.WriteLine($"You survived the siege for {score} days.");
         }
 
         static void Announce(string announcement)
         {
-            ConsoleColor fg = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine(announcement);
+            ColourWriteLine(announcement, ConsoleColor.Yellow);
+        }
+        static void BattleReport(string report)
+        {
+            ColourWriteLine(report, ConsoleColor.Magenta);
+        }
+        static void Store(string storeString)
+        {
+            ColourWriteLine(storeString, ConsoleColor.Green);
+        }
+        static void ColourWrite(string input, ConsoleColor colour)
+        {
+            ColourWrite(input, colour, Console.BackgroundColor);
+        }
+        static void ColourWrite(string input, ConsoleColor fg, ConsoleColor bg)
+        {
+            ConsoleColor fore = Console.ForegroundColor;
+            ConsoleColor back = Console.BackgroundColor;
             Console.ForegroundColor = fg;
+            Console.BackgroundColor = bg;
+            Console.Write(input);
+            Console.ForegroundColor = fore;
+            Console.BackgroundColor = back;
+        }
+        static void ColourWriteLine(string input, ConsoleColor colour)
+        {
+            ColourWrite($"{input}\n", colour);
+        }
+        static void ColourWriteLine(string input, ConsoleColor fg, ConsoleColor bg)
+        {
+            ColourWrite($"{input}\n", fg, bg);
         }
 
-        static int CheckIfUserInputEvaluationIsATarget(List<int> Targets, List<string> UserInputInRPN, ref int Score)
+        static int CheckIfUserInputEvaluationIsATarget(List<int> Targets, List<string> UserInputInRPN, Attack attackType, ref int Score)
         {
             int UserInputEvaluation = EvaluateRPN(UserInputInRPN);
             int kills = 0;
             if (UserInputEvaluation != -1)
             {
-                for (int Count = 0; Count < Targets.Count; Count++)
+                if (attackType == Attack.Archers)
                 {
-                    if (Targets[Count] == UserInputEvaluation)
+                    for (int Count = 0; Count < Targets.Count; Count++)
                     {
-                        Score += 2;
-                        Targets[Count] = -1;
-                        kills++;
+                        if (Targets[Count] == UserInputEvaluation)
+                        {
+                            Score += 2;
+                            Targets[Count] = -1;
+                            kills++;
+                        }
+                    }
+                    if (kills == 0)
+                    {
+                        BattleReport("The archers have missed!");
+                    }
+                    else if (kills == 1)
+                    {
+                        BattleReport("The archers have hit their mark!");
+                    }
+                    else
+                    {
+                        BattleReport("The archers have hit their marks!");
+                    }
+                }
+                else if (attackType == Attack.Ballista)
+                {
+                    for (int Count = 0; Count < Targets.Count; Count++)
+                    {
+                        if (Targets[Count] == UserInputEvaluation)
+                        {
+                            Score += 2;
+                            Targets[Count] = -1;
+                            kills++;
+                            break;
+                        }
+                    }
+                    if (kills == 0)
+                    {
+                        BattleReport("The ballista has missed!");
+                    }
+                    else
+                    {
+                        BattleReport("The ballista has hit it's mark!");
                     }
                 }
             }
@@ -227,24 +354,18 @@ namespace TargetClearCS
             return false;
         }
 
-        static void DisplayState(List<int> Targets, List<int> NumbersAllowed, int Score, int farmCount)
+        static void DisplayState(List<int> Targets, List<int> NumbersAllowed, int Score, int farmCount, int wallCount, Attack attack)
         {
-            DisplayTargets(Targets);
-            Console.Write("|");
-            for (int i = 0; i < farmCount; i++)
-            {
-                Console.Write("#");
-                Console.Write("|");
-            }
-            Console.WriteLine();
+            DisplayTargets(Targets, farmCount, wallCount, attack);
             Console.WriteLine();
             DisplayNumbersAllowed(NumbersAllowed);
             DisplayScore(Score);
+            Console.WriteLine($"Currently attacking with {attack}");
         }
 
         static void DisplayScore(int Score)
         {
-            Console.WriteLine($"Current score: {Score}");
+            Console.WriteLine($"Current supplies: {Score}");
             Console.WriteLine();
             Console.WriteLine();
         }
@@ -260,31 +381,48 @@ namespace TargetClearCS
             Console.WriteLine();
         }
 
-        static void DisplayTargets(List<int> Targets)
+        static void DisplayTargets(List<int> Targets, int farmCount, int wallCount, Attack attack)
         {
             Console.Write("|");
-            foreach (int T in Targets)
+            for (int i = 0; i < Targets.Count; i++)
             {
-                if (T == -1)
+                if (Targets[i] == -1)
                 {
-                    Console.Write(" ");
+                    if (i < wallCount)
+                    {
+                        if (attack == Attack.Ballista)
+                        {
+                            ColourWrite("}", ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
+                        }
+                        else
+                        {
+                            ColourWrite("\u2591", ConsoleColor.Gray, ConsoleColor.DarkGray);
+                        }
+                    }
+                    else if (i < farmCount)
+                    {
+                        ColourWrite("#", ConsoleColor.Yellow);
+                    }
+                    else
+                    {
+                        Console.Write(" ");
+                    }
                 }
                 else
                 {
                     List<int> without = Targets.ToArray().ToList();
-                    without.Remove(T);
+                    without.Remove(Targets[i]);
                     ConsoleColor fg = Console.ForegroundColor;
-                    if (Array.IndexOf(without.ToArray(), T) != -1)
+                    if (Array.IndexOf(without.ToArray(), Targets[i]) != -1)
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
                     }
-                    Console.Write(T);
+                    Console.Write(Targets[i]);
                     Console.ForegroundColor = fg;
 
                 }
                 Console.Write("|");
             }
-            Console.WriteLine();
             Console.WriteLine();
         }
 
@@ -410,7 +548,7 @@ namespace TargetClearCS
 
         static int GetTarget(int MaxTarget)
         {
-            return RGen.Next(MaxTarget) + 1;
+            return RGen.Next(MaxTarget - 50, MaxTarget) + 1;
         }
 
         static int GetNumber(int MaxNumber)
